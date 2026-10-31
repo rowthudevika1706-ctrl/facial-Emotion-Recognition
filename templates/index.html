@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facial Emotion Recognition System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top Navigation / Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="header-title-group">
+        <div class="logo-icon">🎭</div>
+        <div>
+          <h1>Facial Emotion Recognition System</h1>
+          <p class="subtitle">Deep Learning Assignment &bull; Custom CNN trained on FER-2013 &bull; OpenCV Haar Cascade</p>
+        </div>
+      </div>
+
+      <div class="header-status">
+        {% if model_loaded %}
+          <span class="status-badge status-ready">
+            <span class="status-dot green-dot"></span> Model Ready
+          </span>
+        {% else %}
+          <span class="status-badge status-warning">
+            <span class="status-dot amber-dot"></span> Run train.py First
+          </span>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Dashboard Container -->
+  <main class="main-container">
+
+    {% if not tf_installed %}
+    <div class="alert alert-warning" id="tf-warning-alert">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-content">
+        <strong>TensorFlow Not Installed in Environment:</strong>
+        <p>TensorFlow is not detected in your current Python environment. Please create a Python 3.10/3.11 virtual environment and run:
+           <code>pip install -r requirements.txt</code></p>
+      </div>
+    </div>
+    {% elif not model_loaded %}
+    <div class="alert alert-warning" id="model-warning-alert">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-content">
+        <strong>Trained Model Not Detected:</strong>
+        <p>The weights file <code>models/emotion_model.keras</code> was not found. Please train the CNN first by running:
+           <code>python train.py --sample 500</code> (quick mode) or <code>python train.py</code> in your Windows terminal.</p>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Mode Selector Tabs -->
+    <div class="tabs-container">
+      <button class="tab-button active" id="tab-image-mode">
+        <span class="tab-icon">📷</span> Image Upload
+      </button>
+      <button class="tab-button" id="tab-webcam-mode">
+        <span class="tab-icon">📹</span> Live Webcam Feed
+      </button>
+    </div>
+
+    <!-- Dual Column Grid -->
+    <div class="dashboard-grid">
+
+      <!-- LEFT COLUMN: Input & Visualizer Viewport -->
+      <section class="card viewport-card">
+        
+        <!-- SECTION A: Image Upload Mode -->
+        <div id="image-mode-section" class="mode-section active">
+          <div class="card-header">
+            <h2>Image Analysis</h2>
+            <span class="info-pill">Upload an image with one or more faces</span>
+          </div>
+
+          <!-- Drag and Drop Upload Zone -->
+          <div class="drop-zone" id="drop-zone">
+            <input type="file" id="file-input" accept="image/*" class="file-input-hidden">
+            <div class="drop-zone-content">
+              <div class="upload-icon">📁</div>
+              <p class="upload-primary-text">Drag and drop your image here, or <span class="browse-link">browse</span></p>
+              <p class="upload-hint">Supports PNG, JPG, JPEG, WEBP (Max 10 MB)</p>
+            </div>
+          </div>
+
+          <!-- Uploaded Image & Overlay Canvas Container -->
+          <div class="preview-stage hidden" id="image-stage">
+            <div class="canvas-wrapper" id="image-canvas-wrapper">
+              <img id="image-preview" alt="Uploaded Preview" crossorigin="anonymous">
+              <canvas id="image-overlay-canvas"></canvas>
+            </div>
+            <div class="stage-toolbar">
+              <button class="btn btn-secondary" id="btn-upload-another">
+                <span>🔄</span> Test Another Image
+              </button>
+              <span id="face-count-tag" class="badge">0 Faces</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION B: Live Webcam Feed Mode -->
+        <div id="webcam-mode-section" class="mode-section">
+          <div class="card-header">
+            <h2>Live Webcam Recognition</h2>
+            <div class="live-indicator hidden" id="webcam-live-indicator">
+              <span class="pulse-dot"></span> LIVE
+            </div>
+          </div>
+
+          <!-- Webcam Video and Canvas Overlay Container -->
+          <div class="webcam-stage">
+            <div class="canvas-wrapper" id="webcam-canvas-wrapper">
+              <video id="webcam-video" autoplay playsinline muted></video>
+              <canvas id="webcam-overlay-canvas"></canvas>
+              <!-- Placeholder when camera is inactive -->
+              <div class="webcam-placeholder" id="webcam-placeholder">
+                <div class="placeholder-icon">📷</div>
+                <p>Camera is currently turned off.</p>
+                <p class="placeholder-sub">Click "Start Webcam" below to begin live emotion detection.</p>
+              </div>
+            </div>
+
+            <!-- Webcam Controls -->
+            <div class="webcam-controls">
+              <button class="btn btn-primary" id="btn-start-webcam">
+                <span>▶️</span> Start Webcam
+              </button>
+              <button class="btn btn-danger hidden" id="btn-stop-webcam">
+                <span>⏹️</span> Stop Webcam
+              </button>
+              <span class="latency-pill hidden" id="fps-pill">Processing...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notification / Error Box -->
+        <div id="status-message" class="status-banner hidden"></div>
+      </section>
+
+      <!-- RIGHT COLUMN: Real-Time Results & Probabilities -->
+      <section class="card results-card">
+        <div class="card-header">
+          <h2>Emotion Prediction</h2>
+          <span class="timestamp-pill" id="result-status-pill">Awaiting Input</span>
+        </div>
+
+        <!-- Primary Emotion Spotlight Card -->
+        <div class="primary-emotion-card" id="primary-emotion-card">
+          <div class="emotion-emoji" id="primary-emoji">😐</div>
+          <div class="primary-emotion-details">
+            <span class="emotion-label-small">Dominant Expression</span>
+            <h3 class="emotion-name" id="primary-emotion-name">Neutral</h3>
+            <div class="confidence-container">
+              <span class="confidence-label">Confidence:</span>
+              <span class="confidence-val" id="primary-confidence">0.0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Multi-Face Selector (shown when > 1 face is found) -->
+        <div id="multi-face-selector" class="multi-face-container hidden">
+          <label for="face-select-dropdown">Multiple faces detected:</label>
+          <select id="face-select-dropdown" class="select-input">
+            <!-- Populated via JavaScript -->
+          </select>
+        </div>
+
+        <!-- Probability Breakdown for all 7 Emotions -->
+        <div class="probabilities-section">
+          <h4>Probability Distribution (Softmax Output)</h4>
+          <div class="probabilities-list" id="probabilities-list">
+            <!-- 7 Class Progress Bars -->
+            <div class="prob-row" data-emotion="Angry">
+              <div class="prob-header">
+                <span class="prob-name">😡 Angry</span>
+                <span class="prob-value" id="val-Angry">0.0%</span>
+              </div>
+              <div class="prob-track">
+                <div class="prob-fill color-angry" id="bar-Angry" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="prob-row" data-emotion="Disgust">
+              <div class="prob-header">
+                <span class="prob-name">🤢 Disgust</span>
+                <span class="prob-value" id="val-Disgust">0.0%</span>
+              </div>
+              <div class="prob-track">
+                <div class="prob-fill color-disgust" id="bar-Disgust" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="prob-row" data-emotion="Fear">
+              <div class="prob-header">
+                <span class="prob-name">😨 Fear</span>
+                <span class="prob-value" id="val-Fear">0.0%</span>
+              </div>
+              <div class="prob-track">
+                <div class="prob-fill color-fear" id="bar-Fear" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="prob-row" data-emotion="Happy">
+              <div class="prob-header">
+                <span class="prob-name">😄 Happy</span>
+                <span class="prob-value" id="val-Happy">0.0%</span>
+              </div>
+              <div class="prob-track">
+                <div class="prob-fill color-happy" id="bar-Happy" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="prob-row" data-emotion="Neutral">
+              <div class="prob-header">
+                <span class="prob-name">😐 Neutral</span>
+                <span class="prob-value" id="val-Neutral">0.0%</span>
+              </div>
+              <div class="prob-track">
+                <div class="prob-fill color-neutral" id="bar-Neutral" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="prob-row" data-emotion="Sad">
+              <div class="prob-header">
+                <span class="prob-name">😢 Sad</span>
+                <span class="prob-value" id="val-Sad">0.0%</span>
+              </div>
+              <div class="prob-track">
+                <div class="prob-fill color-sad" id="bar-Sad" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="prob-row" data-emotion="Surprise">
+              <div class="prob-header">
+                <span class="prob-name">😲 Surprise</span>
+                <span class="prob-value" id="val-Surprise">0.0%</span>
+              </div>
+              <div class="prob-track">
+                <div class="prob-fill color-surprise" id="bar-Surprise" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Assignment Info Box -->
+        <div class="assignment-info-box">
+          <div class="info-row">
+            <span>Face Detector:</span>
+            <strong>OpenCV Haar Cascade</strong>
+          </div>
+          <div class="info-row">
+            <span>Input Size:</span>
+            <strong>48 &times; 48 Grayscale</strong>
+          </div>
+          <div class="info-row">
+            <span>Model:</span>
+            <strong>Custom 3-Block CNN (Keras)</strong>
+          </div>
+        </div>
+
+      </section>
+    </div>
+  </main>
+
+  <!-- Application Footer -->
+  <footer class="app-footer">
+    <p>Facial Emotion Recognition System &bull; College Deep Learning Project &bull; Built with TensorFlow, OpenCV & Flask</p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/webcam.js') }}"></script>
+</body>
+</html>

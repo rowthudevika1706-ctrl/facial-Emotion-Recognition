@@ -1,0 +1,26 @@
+============================================================
+      FER-2013 FACIAL EMOTION RECOGNITION TEST REPORT       
+============================================================
+
+Overall Test Accuracy: 61.15%
+
+Classification Metrics by Emotion Class:
+              precision    recall  f1-score   support
+
+       Angry     0.5584    0.5081    0.5321       988
+     Disgust     0.4724    0.6667    0.5529       141
+        Fear     0.5066    0.2932    0.3714      1054
+       Happy     0.8359    0.8076    0.8215      1804
+     Neutral     0.4992    0.7102    0.5863      1263
+         Sad     0.4930    0.4706    0.4816      1277
+    Surprise     0.7144    0.7642    0.7385       861
+
+    accuracy                         0.6115      7388
+   macro avg     0.5828    0.6030    0.5835      7388
+weighted avg     0.6139    0.6115    0.6048      7388
+
+
+METRIC GUIDE FOR STUDENTS:
+- Precision: When the model predicts emotion X, how often is it correct?
+- Recall: Out of all real instances of emotion X, how many did the model find?
+- F1-Score: Harmonic balance between Precision and Recall.
